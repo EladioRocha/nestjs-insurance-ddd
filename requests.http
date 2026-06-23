@@ -1,0 +1,31 @@
+### Health by listing quotes
+GET http://localhost:3000/api/insurance-quotes
+
+### Create insurance quote
+POST http://localhost:3000/api/insurance-quotes
+Content-Type: application/json
+
+{
+  "customerId": "CUS-001",
+  "insuredName": "Eladio Rocha",
+  "insuredAge": 27,
+  "vehicle": {
+    "brand": "Volkswagen",
+    "model": "Jetta",
+    "year": 2021,
+    "usage": "personal"
+  },
+  "packageType": "PLUS"
+}
+
+### Issue policy. Replace quoteId with the id returned from the quote request.
+POST http://localhost:3000/api/policies/issue
+Content-Type: application/json
+
+{
+  "quoteId": "REPLACE_WITH_QUOTE_ID",
+  "paymentReference": "PAY-123456"
+}
+
+### List policies
+GET http://localhost:3000/api/policies
