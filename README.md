@@ -1,94 +1,78 @@
-# Insurance DDD NestJS Example
+# NestJS Insurance DDD
 
-Ejemplo práctico de **NestJS + DDD + Modular Monolith** para una empresa de seguros.
+A practical **NestJS modular monolith** demonstrating domain-driven design through two insurance business contexts:
 
-Incluye dos contextos de negocio:
+1. `insurance-quotes`: create and manage vehicle insurance quotes.
+2. `policy-issuance`: issue a policy from a valid quote.
 
-1. `insurance-quotes`: cotizaciones de seguros de auto.
-2. `policy-issuance`: emisión de pólizas a partir de una cotización vigente.
+Repositories store data **in memory**, so you can explore the example without a database server. Data is lost when the application restarts.
 
-La base de datos es **en memoria** para que puedas probarlo rápido sin Docker, PostgreSQL ni Firestore.
+## Requirements and setup
 
----
+- Node.js 20 or later, as declared in `package.json`.
+- npm.
 
-## Idea para explicárselo a un colega
+```sh
+npm install
+npm run start:dev
+```
 
-DDD no empieza preguntando: “¿qué controller o service hago?”
+The API is available at **http://localhost:3000/api**.
 
-DDD pregunta primero:
+## Architecture
 
-> ¿Qué partes del negocio existen y qué reglas tiene cada una?
+DDD starts by identifying business concepts and their rules. Quotes, policy issuance, renewals, cancellations, claims, payments, and endorsements can each define distinct contexts. This example implements the first two:
 
-En seguros, por ejemplo:
-
-- Cotización
-- Emisión
-- Renovación
-- Cancelación
-- Siniestros
-- Pagos
-- Endosos
-
-Cada una puede ser un módulo o bounded context.
-
-En este proyecto usamos:
-
-```txt
+```text
 src/modules
 ├── insurance-quotes
 └── policy-issuance
 ```
 
-Cada módulo se organiza así:
+Each module separates responsibilities:
 
-```txt
+```text
 module
-├── domain          # Reglas del negocio. No sabe de Nest, HTTP ni DB.
-├── usecase        # Casos de uso. Orquesta entidades y repositorios.
-├── application    # Controllers, DTOs, presenters y puertos públicos.
-└── infrastructure # Repositorios reales, APIs externas, event handlers.
+├── domain          # Business rules, independent of NestJS, HTTP, and storage.
+├── usecase         # Application intentions and entity/repository orchestration.
+├── application     # Controllers, DTOs, presenters, and public ports.
+└── infrastructure  # Repository implementations, integrations, and event handlers.
 ```
 
-La frase clave:
+Controllers receive HTTP requests, use cases coordinate an operation, the domain enforces business rules, and infrastructure persists data or connects to external systems.
 
-> El controller recibe HTTP. El use case ejecuta una intención. El domain protege las reglas. La infrastructure guarda o conecta con cosas externas.
+### Quote creation
 
----
-
-## Requisitos
-
-- Node.js 20 o superior
-- npm
-
----
-
-## Instalación
-
-```bash
-npm install
+```text
+POST /api/insurance-quotes
+  → InsuranceQuotesController
+  → CreateInsuranceQuoteUseCase
+  → InsuranceQuote entity
+  → InsuranceQuoteRepository interface
+  → InMemoryInsuranceQuoteRepository
 ```
 
----
+### Policy issuance
 
-## Ejecutar
-
-```bash
-npm run start:dev
+```text
+POST /api/policies/issue
+  → PolicyIssuanceController
+  → IssuePolicyUseCase
+  → QuoteReader public port
+  → Policy entity
+  → PolicyRepository interface
+  → InMemoryPolicyRepository
 ```
 
-La API queda disponible en:
+The `policy-issuance` module accesses quotes through the public `QUOTE_READER` port instead of importing the quote module's internal repository. This keeps the dependency between business contexts explicit.
 
-```txt
-http://localhost:3000/api
-```
+## API walkthrough
 
----
+The following cURL examples use POSIX shell quoting. On Windows, use a compatible shell or adapt JSON quoting for PowerShell. See also [requests.http](requests.http).
 
-## Probar con cURL
+### 1. Create a quote
 
-### 1. Crear una cotización
-
-```bash
+```sh
 curl -X POST http://localhost:3000/api/insurance-quotes \
   -H "Content-Type: application/json" \
   -d '{
@@ -105,7 +89,7 @@ curl -X POST http://localhost:3000/api/insurance-quotes \
   }'
 ```
 
-Respuesta esperada aproximada:
+Illustrative response; generated identifiers and dates vary:
 
 ```json
 {
@@ -142,15 +126,13 @@ Respuesta esperada aproximada:
 }
 ```
 
-Guarda el `id` de la cotización.
+Save the returned quote `id`.
 
----
+### 2. Issue a policy
 
-### 2. Emitir una póliza
+Replace `QUOTE_ID` with the quote identifier:
 
-Reemplaza `QUOTE_ID` con el `id` de la cotización.
-
-```bash
+```sh
 curl -X POST http://localhost:3000/api/policies/issue \
   -H "Content-Type: application/json" \
   -d '{
@@ -159,7 +141,7 @@ curl -X POST http://localhost:3000/api/policies/issue \
   }'
 ```
 
-Respuesta esperada aproximada:
+Illustrative response:
 
 ```json
 {
@@ -181,109 +163,35 @@ Respuesta esperada aproximada:
 }
 ```
 
----
+### 3. List quotes and policies
 
-### 3. Listar cotizaciones
-
-```bash
+```sh
 curl http://localhost:3000/api/insurance-quotes
-```
-
----
-
-### 4. Listar pólizas
-
-```bash
 curl http://localhost:3000/api/policies
 ```
 
----
+## Endpoints
 
-## Ejecutar prueba unitaria
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/insurance-quotes` | Create a quote. |
+| GET | `/api/insurance-quotes` | List quotes. |
+| GET | `/api/insurance-quotes/:id` | Retrieve a quote. |
+| POST | `/api/policies/issue` | Issue a policy from a quote. |
+| GET | `/api/policies` | List policies. |
+| GET | `/api/policies/:id` | Retrieve a policy. |
 
-```bash
-npm run test
+## Tests and build
+
+```sh
+npm test
+npm run build
 ```
 
-La prueba demuestra que el caso de uso puede ejecutarse sin levantar HTTP, sin Nest completo y sin base de datos real.
+The unit test demonstrates running a use case without starting the HTTP server or connecting to a database. `npm run start:prod` runs the compiled application after a successful build.
 
----
+## Extending the example
 
-## Cómo leer el ejemplo
+For persistent storage, replace `InMemoryInsuranceQuoteRepository` and `InMemoryPolicyRepository` with implementations backed by the database of your choice. Keep the repository contracts intact so the domain and use cases require minimal changes.
 
-### Cotización
-
-Flujo:
-
-```txt
-POST /insurance-quotes
-        ↓
-InsuranceQuotesController
-        ↓
-CreateInsuranceQuoteUseCase
-        ↓
-InsuranceQuote Entity
-        ↓
-InsuranceQuoteRepository interface
-        ↓
-InMemoryInsuranceQuoteRepository
-```
-
-### Emisión
-
-Flujo:
-
-```txt
-POST /policies/issue
-        ↓
-PolicyIssuanceController
-        ↓
-IssuePolicyUseCase
-        ↓
-QuoteReader public port
-        ↓
-Policy Entity
-        ↓
-PolicyRepository interface
-        ↓
-InMemoryPolicyRepository
-```
-
-`policy-issuance` no importa directamente el repositorio interno de cotizaciones. Usa `QUOTE_READER`, que es la interfaz pública del módulo de cotizaciones.
-
-Eso es importante porque evita que los módulos se vuelvan un plato de espagueti con casco de programador.
-
----
-
-## Qué cambiarías en un proyecto real
-
-En producción cambiarías:
-
-```txt
-InMemoryInsuranceQuoteRepository
-InMemoryPolicyRepository
-```
-
-por implementaciones reales, por ejemplo:
-
-```txt
-PostgresInsuranceQuoteRepository
-FirestoreInsuranceQuoteRepository
-PrismaPolicyRepository
-```
-
-El dominio y los casos de uso deberían cambiar poco o nada.
-
----
-
-## Endpoints incluidos
-
-```txt
-POST /api/insurance-quotes
-GET  /api/insurance-quotes
-GET  /api/insurance-quotes/:id
-
-POST /api/policies/issue
-GET  /api/policies
-GET  /api/policies/:id
-```
+This is an educational architecture example, not a production insurance platform. Its in-memory persistence and illustrative premium calculation need application-specific validation before real use.
